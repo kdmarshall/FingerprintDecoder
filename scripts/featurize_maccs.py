@@ -14,7 +14,7 @@ max_char_len = 100
 min_char_len = 20
 
 data_dir = 'data/compounds'
-out_file = 'data/features.npz'
+out_file = 'data/features_fp166.npz'
 sdf_list = [os.path.join(data_dir,f) for f in os.listdir(data_dir) if f.endswith('.sdf')]
 
 fps = []

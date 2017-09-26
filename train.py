@@ -19,12 +19,24 @@ def main(*args):
 	num_rnn_layers = 1
 
 	dataset = DataSet(FLAGS.dataset)
-	model = Model(dataset.samples_shape[1],
+	print(dataset.samples_shape)
+	print(dataset.labels_shape)
+	return None
+	train_model = Model(dataset.samples_shape[1],
 				  dataset.labels_shape[1],
 				  dataset.labels_shape[2],
 				  cell_size,
 				  num_rnn_layers,
-				  learning_rate,
+				  lr=learning_rate,
+				  cell_type='lstm')
+
+	valid_model = Model(dataset.samples_shape[1],
+				  dataset.labels_shape[1],
+				  dataset.labels_shape[2],
+				  cell_size,
+				  num_rnn_layers,
+				  training=False,
+				  lr=learning_rate,
 				  cell_type='lstm')
 
 	with tf.Session() as sess:
@@ -33,19 +45,19 @@ def main(*args):
 		for step in range(training_steps):
 			train_samples, train_labels, train_weights = dataset.get_batch(FLAGS.batch_size, 'train')
 			train_labels_T = np.transpose(train_labels, (1, 0, 2))
-			_loss, prediction = model.step(train_samples, train_labels_T, train_weights, sess)
-			# loss.append(_loss)
+			_loss, prediction = train_model.step(train_samples, train_labels_T, train_weights, sess)
+			loss.append(_loss)
 			if (step % valid_step) == 0:
-				# print("Average training loss: %s" % np.mean(loss))
-				# loss = []
-				valid_samples, valid_labels, valid_weights = dataset.get_batch(FLAGS.batch_size, 'valid')
-				valid_labels_T = np.transpose(valid_labels, (1, 0, 2))
-				v_loss, v_prediction = model.step(valid_samples, valid_labels_T, valid_weights, sess, valid=True)
-				print("Valid loss @ step %s: %s" % (step,v_loss))
-				for p in v_prediction:
-					pred = decode_ohe(p)
-					cleaned_pred = clean_prediction(pred)
-					print(cleaned_pred)
+				print("Average training loss: %s" % np.mean(loss))
+				loss = []
+				# valid_samples, valid_labels, valid_weights = dataset.get_batch(FLAGS.batch_size, 'valid')
+				# valid_labels_T = np.transpose(valid_labels, (1, 0, 2))
+				# _, v_prediction = valid_model.step(valid_samples, valid_labels_T, valid_weights, sess, valid=True)
+				# print("Valid @ step %s" % (step,))
+				# for p in v_prediction[:5]:
+				# 	pred = decode_ohe(p)
+				# 	cleaned_pred = clean_prediction(pred)
+				# 	print(cleaned_pred)
 
 				# correct_prediction = tf.equal(tf.argmax(), tf.argmax(valid_labels))
 				# accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))

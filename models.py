@@ -14,20 +14,32 @@ from utils import (EOS_ID,
 
 class EncoderModel(object):
 	"""Core training model"""
-	def __init__(self, input_shape, max_seq_len, vocab_size, cell_size, num_layers, lr=5e-5, cell_type='gru'):
+	def __init__(self, input_shape, max_seq_len, vocab_size, cell_size, num_layers, training=True, lr=5e-5, cell_type='gru'):
 
 		self.vocab_size = vocab_size
 		self.cell_size = cell_size
+		self.training = training
 
 		# Placeholders
 		self.input_node = tf.placeholder(tf.float32, [None, input_shape])
 		self.label_node = tf.placeholder(tf.float32, [max_seq_len, None, vocab_size])
 		self.label_weights = tf.placeholder(tf.float32, [None, max_seq_len])
 
-		w1 = tf.Variable(tf.random_normal([input_shape, 128]))
-		b1 = tf.Variable(tf.random_normal([128]))
-		w2 = tf.Variable(tf.random_normal([128, cell_size*2]))
-		b2 = tf.Variable(tf.random_normal([cell_size*2]))
+		with tf.variable_scope("fc_vars") as varscope:
+			if not self.training:
+				tf.get_variable_scope().reuse_variables()
+			w1 = tf.get_variable('w1',
+								  shape=[input_shape, input_shape//2],
+								  initializer=tf.random_normal_initializer())
+			b1 = tf.get_variable('b1',
+								  shape=[input_shape//2],
+								  initializer=tf.random_normal_initializer())
+			w2 = tf.get_variable('w2',
+								  shape=[input_shape//2, cell_size*2],
+								  initializer=tf.random_normal_initializer())
+			b2 = tf.get_variable('b2',
+								  shape=[cell_size*2],
+								  initializer=tf.random_normal_initializer())
 
 		dense_1 = tf.nn.relu(tf.add(tf.matmul(self.input_node, w1), b1))
 		dense_2 = tf.nn.relu(tf.add(tf.matmul(dense_1, w2), b2))
@@ -39,67 +51,51 @@ class EncoderModel(object):
 		else:
 			raise ValueError("Cell type '%s' not valid"%cell_type)
 
-		self.decoder_cell = single_cell = cell_class(cell_size)
+		self.decoder_cell = single_cell = cell_class(cell_size, state_is_tuple=True)
 		if num_layers > 1:
-			self.decoder_cell = MultiRNNCell([single_cell] * num_layers)
+			self.decoder_cell = MultiRNNCell([single_cell for _ in range(num_layers)], state_is_tuple=True)
 
 		initial_input, initial_state = dense_2[:,:cell_size], dense_2[:,cell_size:]
-		# print(initial_input.get_shape())
 		state_vector = LSTMStateTuple(
     		c=initial_state,
     		h=initial_input
 		)
 
-		# batch_size, _ = tf.unstack(tf.shape(self.input_node))
-		# eos_time_slice = tf.fill([batch_size], EOS_ID)
-		# pad_time_slice = tf.fill([batch_size], PAD_ID)
-		# go_time_slice = tf.fill([batch_size], GO_ID)
-
-		# state_vector = initial_state
-		with tf.variable_scope("run_rnn") as varscope:
-			logits_list = []
-			for i in range(max_seq_len):
-				if i > 0:
+		if self.training:
+			with tf.variable_scope("rnn") as varscope:
+				logits_list = []
+				for i in range(max_seq_len):
+					if i > 0:
+						tf.get_variable_scope().reuse_variables()
+					time_input = self.label_node[i, :, :]
+					output, state_vector = self.decoder_cell(time_input, state_vector)
+					output_logits = self.project_to_chars(output)
+					logits_list.append(output_logits)
+		else:
+			with tf.variable_scope("rnn") as varscope:
+				logits_list = []
+				for i in range(max_seq_len):
+					if i > 0:
+						time_input = tf.one_hot(tf.argmax(output_logits, axis=-1), self.vocab_size)
+					else:
+						time_input = self.label_node[0, :, :]
 					tf.get_variable_scope().reuse_variables()
-				time_input = self.label_node[i, :, :]
-				output, state_vector = self.decoder_cell(time_input, state_vector)
-				output_logits = self.project_to_chars(output)
-				logits_list.append(output_logits)
+					output, state_vector = self.decoder_cell(time_input, state_vector)
+					output_logits = self.project_to_chars(output)
+					logits_list.append(output_logits)
+
 
 		logits_tensor = tf.stack(logits_list)
-		# print(logits_tensor.get_shape())
 		logits_tensor_T = tf.transpose(logits_tensor, [1,0,2])
 		self.softmax_logits = tf.nn.softmax(logits_tensor_T)
-		label_node_T = tf.transpose(self.label_node, [1,0,2])
-		# print(logits_tensor_T.get_shape())
-		# print(label_node_T.get_shape())
-		# print(len(self.label_weights.get_shape()))
-		dense_labels = tf.argmax(label_node_T, axis=2)
-		# print(dense_labels.get_shape())
+		if self.training:
+			label_node_T = tf.transpose(self.label_node, [1,0,2])
+			dense_labels = tf.argmax(label_node_T, axis=2)
+			self.loss = seq2seq.sequence_loss(logits_tensor_T,
+											  dense_labels,
+											  self.label_weights)
+			self.optimizer = tf.train.AdamOptimizer(lr).minimize(self.loss)
 
-		self.loss = seq2seq.sequence_loss(logits_tensor_T,
-										  dense_labels,
-										  self.label_weights)
-
-		
-		self.optimizer = tf.train.AdamOptimizer(lr).minimize(self.loss)
-
-
-
-		# weights = tf.Variable(tf.random_normal([hidden_units, 1]))
-		# biases = tf.Variable(tf.random_normal([1]))
-
-		# cell = LSTMCell(hidden_units)
-		# outputs, states = tf.nn.dynamic_rnn(cell,
-		# 									self.input_node,
-		# 									dtype=tf.float32,
-		# 									time_major=False)
-		# outputs_T = tf.transpose(outputs, [1,0,2])
-		# last = tf.gather(outputs_T, int(outputs_T.get_shape()[0]) - 1)
-		# raw_logits = tf.matmul(last, weights) + biases
-		# self.logits = tf.squeeze(tf.nn.sigmoid(raw_logits))
-		# self.loss = tf.reduce_mean(tf.square(self.labels - self.logits))
-		# self.optimizer = tf.train.AdamOptimizer(learning_rate=lr).minimize(self.loss)
 
 	def project_to_chars(self, input):
 		weights = tf.get_variable('project_chars_weights',
@@ -110,23 +106,16 @@ class EncoderModel(object):
 								initializer=tf.random_normal_initializer())
 		return tf.add(tf.matmul(input, weights), bias)
 
-	def project_to_cell(self, input):
-		weights = tf.get_variable('project_cell_weights',
-								  shape=[self.vocab_size, self.cell_size],
-								  initializer=tf.random_normal_initializer)
-		bias = tf.get_variable('project_cell_bias',
-								shape=[self.cell_size],
-								initializer=tf.random_normal_initializer)
-		return tf.nn.relu(tf.add(tf.matmul(input, weights), bias))
 
 	def step(self, input_batch, label_batch, length_batch, sess, valid=False):
 		if valid:
-			l, pred = sess.run([self.loss, self.softmax_logits],
-								   feed_dict={
-								    self.input_node: input_batch,
-								    self.label_node: label_batch,
-		                          	self.label_weights: length_batch
-								   })
+			pred = sess.run(self.softmax_logits,
+							 feed_dict={
+							  self.input_node: input_batch,
+							  self.label_node: label_batch,
+	                          self.label_weights: length_batch
+							 })
+			return None, pred
 		else:
 			l, pred, _ = sess.run([self.loss, self.softmax_logits, self.optimizer],
 								   feed_dict={

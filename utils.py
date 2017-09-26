@@ -39,7 +39,6 @@ def ohe_label(label):
 	return ohe
 
 def decode_label(encoded_label):
-	# char_indicies = np.argmax(encoded_label, axis=1)
 	char_idx = np.argmax(encoded_label)
 	return char_idx
 
