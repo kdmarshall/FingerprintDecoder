@@ -2,6 +2,7 @@ import os
 import sys
 import numpy as np
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
 from tensorflow.contrib.rnn import (LSTMCell,
 									GRUCell,
 									MultiRNNCell,
@@ -14,7 +15,7 @@ from utils import (EOS_ID,
 
 class EncoderModel(object):
 	"""Core training model"""
-	def __init__(self, input_shape, max_seq_len, vocab_size, cell_size, num_layers, training=True, lr=5e-5, cell_type='gru'):
+	def __init__(self, input_shape, max_seq_len, vocab_size, cell_size, num_layers, hidden_layers, training=True, lr=5e-5, cell_type='lstm'):
 
 		self.vocab_size = vocab_size
 		self.cell_size = cell_size
@@ -25,24 +26,13 @@ class EncoderModel(object):
 		self.label_node = tf.placeholder(tf.float32, [max_seq_len, None, vocab_size])
 		self.label_weights = tf.placeholder(tf.float32, [None, max_seq_len])
 
-		with tf.variable_scope("fc_vars") as varscope:
-			if not self.training:
-				tf.get_variable_scope().reuse_variables()
-			w1 = tf.get_variable('w1',
-								  shape=[input_shape, input_shape//2],
-								  initializer=tf.random_normal_initializer())
-			b1 = tf.get_variable('b1',
-								  shape=[input_shape//2],
-								  initializer=tf.random_normal_initializer())
-			w2 = tf.get_variable('w2',
-								  shape=[input_shape//2, cell_size*2],
-								  initializer=tf.random_normal_initializer())
-			b2 = tf.get_variable('b2',
-								  shape=[cell_size*2],
-								  initializer=tf.random_normal_initializer())
-
-		dense_1 = tf.nn.relu(tf.add(tf.matmul(self.input_node, w1), b1))
-		dense_2 = tf.nn.relu(tf.add(tf.matmul(dense_1, w2), b2))
+		layers = []
+		for layer_index, layer_size in enumerate(hidden_layers):
+			if layer_index == 0:
+				layers.append(slim.fully_connected(self.input_node, layer_size, scope="layer%s" % layer_index))
+			else:
+				layers.append(slim.fully_connected(layers[-1], layer_size, scope="layer%s" % layer_index))
+		out_layer = layers[-1]
 		
 		if cell_type == 'gru':
 			cell_class = GRUCell
@@ -51,15 +41,19 @@ class EncoderModel(object):
 		else:
 			raise ValueError("Cell type '%s' not valid"%cell_type)
 
-		self.decoder_cell = single_cell = cell_class(cell_size, state_is_tuple=True)
 		if num_layers > 1:
-			self.decoder_cell = MultiRNNCell([single_cell for _ in range(num_layers)], state_is_tuple=True)
+			self.decoder_cell = MultiRNNCell([cell_class(cell_size, state_is_tuple=True) for _ in range(num_layers)], state_is_tuple=True)
+		else:
+			self.decoder_cell = cell_class(cell_size, state_is_tuple=True)
 
-		initial_input, initial_state = dense_2[:,:cell_size], dense_2[:,cell_size:]
-		state_vector = LSTMStateTuple(
-    		c=initial_state,
-    		h=initial_input
-		)
+		initial_input, initial_state = out_layer[:,:cell_size], out_layer[:,cell_size:]
+		if num_layers > 1:
+			state_vector = [LSTMStateTuple(c=initial_state, h=initial_input) for _ in range(num_layers)]
+		else:
+			state_vector = LSTMStateTuple(
+	    		c=initial_state,
+	    		h=initial_input
+			)
 
 		if self.training:
 			with tf.variable_scope("rnn") as varscope:

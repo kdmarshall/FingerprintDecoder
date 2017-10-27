@@ -13,20 +13,19 @@ FLAGS = tf.app.flags.FLAGS
 def main(*args):
 	# Hyper parameters
 	learning_rate = 0.001
-	training_steps = 10000
-	valid_step = 50
+	training_steps = 100000
+	valid_step = 100
 	cell_size = 256
-	num_rnn_layers = 1
+	hidden_layers = (256, 256, 256, cell_size*2)
+	num_rnn_layers = 3
 
 	dataset = DataSet(FLAGS.dataset)
-	print(dataset.samples_shape)
-	print(dataset.labels_shape)
-	return None
 	train_model = Model(dataset.samples_shape[1],
 				  dataset.labels_shape[1],
 				  dataset.labels_shape[2],
 				  cell_size,
 				  num_rnn_layers,
+				  hidden_layers,
 				  lr=learning_rate,
 				  cell_type='lstm')
 
@@ -35,6 +34,7 @@ def main(*args):
 				  dataset.labels_shape[2],
 				  cell_size,
 				  num_rnn_layers,
+				  hidden_layers,
 				  training=False,
 				  lr=learning_rate,
 				  cell_type='lstm')
@@ -50,14 +50,14 @@ def main(*args):
 			if (step % valid_step) == 0:
 				print("Average training loss: %s" % np.mean(loss))
 				loss = []
-				# valid_samples, valid_labels, valid_weights = dataset.get_batch(FLAGS.batch_size, 'valid')
-				# valid_labels_T = np.transpose(valid_labels, (1, 0, 2))
-				# _, v_prediction = valid_model.step(valid_samples, valid_labels_T, valid_weights, sess, valid=True)
-				# print("Valid @ step %s" % (step,))
-				# for p in v_prediction[:5]:
-				# 	pred = decode_ohe(p)
-				# 	cleaned_pred = clean_prediction(pred)
-				# 	print(cleaned_pred)
+				valid_samples, valid_labels, valid_weights = dataset.get_batch(FLAGS.batch_size, 'valid')
+				valid_labels_T = np.transpose(valid_labels, (1, 0, 2))
+				_, v_prediction = valid_model.step(valid_samples, valid_labels_T, valid_weights, sess, valid=True)
+				print("Valid @ step %s" % (step,))
+				for p in v_prediction[:5]:
+					pred = decode_ohe(p)
+					cleaned_pred = clean_prediction(pred)
+					print(cleaned_pred)
 
 				# correct_prediction = tf.equal(tf.argmax(), tf.argmax(valid_labels))
 				# accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
