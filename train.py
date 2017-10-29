@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-
+import logging
 from utils import (DataSet,
 				   decode_ohe,
 				   clean_prediction)
@@ -8,7 +8,16 @@ from models import EncoderModel as Model
 
 tf.app.flags.DEFINE_string("dataset", None, 'Path to dataset npz.')
 tf.app.flags.DEFINE_integer("batch_size", 32, 'Size of train and valid batches.')
+tf.app.flags.DEFINE_string("log", None, 'File to write log to.')
 FLAGS = tf.app.flags.FLAGS
+# log helper
+def log_setup(log_flag):
+    if log_flag:
+        logging.basicConfig(filename=log_flag, level=logging.INFO, format='%(message)s')
+        return logging.info
+    else:
+        return print
+logger = log_setup(FLAGS.log)
 
 def main(*args):
 	# Hyper parameters
@@ -48,16 +57,16 @@ def main(*args):
 			_loss, prediction = train_model.step(train_samples, train_labels_T, train_weights, sess)
 			loss.append(_loss)
 			if (step % valid_step) == 0:
-				print("Average training loss: %s" % np.mean(loss))
+				logger("Average training loss: %s" % np.mean(loss))
 				loss = []
 				valid_samples, valid_labels, valid_weights = dataset.get_batch(FLAGS.batch_size, 'valid')
 				valid_labels_T = np.transpose(valid_labels, (1, 0, 2))
 				_, v_prediction = valid_model.step(valid_samples, valid_labels_T, valid_weights, sess, valid=True)
-				print("Valid @ step %s" % (step,))
+				logger("Valid @ step %s" % (step,))
 				for p in v_prediction[:5]:
 					pred = decode_ohe(p)
 					cleaned_pred = clean_prediction(pred)
-					print(cleaned_pred)
+					logger(cleaned_pred)
 
 				# correct_prediction = tf.equal(tf.argmax(), tf.argmax(valid_labels))
 				# accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
