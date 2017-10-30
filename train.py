@@ -22,7 +22,7 @@ logger = log_setup(FLAGS.log)
 def main(*args):
 	# Hyper parameters
 	learning_rate = 0.001
-	training_steps = 100000
+	training_steps = 1000000
 	valid_step = 100
 	cell_size = 256
 	hidden_layers = (256, 256, 256, cell_size*2)
