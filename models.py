@@ -28,11 +28,15 @@ class EncoderModel(object):
 
 		layers = []
 		with tf.variable_scope("fc_layers") as varscope:
-			# tf.get_variable_scope().reuse_variables()
 			for layer_index, layer_size in enumerate(hidden_layers):
 				_scope = "layer%s" % layer_index
 				if layer_index == 0:
-					layers.append(slim.fully_connected(self.input_node, layer_size, scope=_scope))
+					try:
+						layers.append(slim.fully_connected(self.input_node, layer_size, scope=_scope))
+					except ValueError:
+						varscope.reuse_variables()
+						layers.append(slim.fully_connected(self.input_node, layer_size, scope=_scope))
+					# layers.append(slim.fully_connected(self.input_node, layer_size, scope=_scope))
 				else:
 					layers.append(slim.fully_connected(layers[-1], layer_size, scope=_scope))
 		out_layer = layers[-1]
