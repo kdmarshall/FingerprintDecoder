@@ -27,7 +27,7 @@ class EncoderModel(object):
 		self.label_weights = tf.placeholder(tf.float32, [None, max_seq_len])
 
 		layers = []
-		with slim.arg_scope([slim.model_variable, slim.variable], device='/cpu:0'):
+		with tf.variable_scope("fc_layers") as varscope:
 			# tf.get_variable_scope().reuse_variables()
 			for layer_index, layer_size in enumerate(hidden_layers):
 				_scope = "layer%s" % layer_index
