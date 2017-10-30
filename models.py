@@ -31,9 +31,9 @@ class EncoderModel(object):
 			for layer_index, layer_size in enumerate(hidden_layers):
 				_scope = "layer%s" % layer_index
 				if layer_index == 0:
-					layers.append(slim.fully_connected(self.input_node, layer_size, reuse=_scope, scope=_scope))
+					layers.append(slim.fully_connected(self.input_node, layer_size, reuse=True, scope=_scope))
 				else:
-					layers.append(slim.fully_connected(layers[-1], layer_size, reuse=_scope, scope=_scope))
+					layers.append(slim.fully_connected(layers[-1], layer_size, reuse=True, scope=_scope))
 		out_layer = layers[-1]
 		
 		if cell_type == 'gru':
