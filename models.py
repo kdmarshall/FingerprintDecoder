@@ -36,7 +36,6 @@ class EncoderModel(object):
 					except ValueError:
 						varscope.reuse_variables()
 						layers.append(slim.fully_connected(self.input_node, layer_size, scope=_scope))
-					# layers.append(slim.fully_connected(self.input_node, layer_size, scope=_scope))
 				else:
 					layers.append(slim.fully_connected(layers[-1], layer_size, scope=_scope))
 		out_layer = layers[-1]

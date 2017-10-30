@@ -7,7 +7,7 @@ from utils import (DataSet,
 from models import EncoderModel as Model
 
 tf.app.flags.DEFINE_string("dataset", None, 'Path to dataset npz.')
-tf.app.flags.DEFINE_integer("batch_size", 16, 'Size of train and valid batches.')
+tf.app.flags.DEFINE_integer("batch_size", 128, 'Size of train and valid batches.')
 tf.app.flags.DEFINE_string("log", None, 'File to write log to.')
 FLAGS = tf.app.flags.FLAGS
 # log helper
@@ -23,7 +23,7 @@ def main(*args):
 	# Hyper parameters
 	learning_rate = 0.001
 	training_steps = 1000000
-	valid_step = 50
+	valid_step = 500
 	cell_size = 256
 	hidden_layers = (256, 256, 256, cell_size*2)
 	num_rnn_layers = 3
